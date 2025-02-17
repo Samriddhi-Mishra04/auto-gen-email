@@ -1,0 +1,86 @@
+import smtplib
+import pymysql
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime
+import os
+
+print("DEBUG: EMAIL_PASSWORD from environment:", os.getenv("EMAIL_PASSWORD"))
+# Retrieve the Gmail app password from environment variables
+password = os.getenv("EMAIL_PASSWORD")
+
+if not password:
+    print("ERROR: The environment variable EMAIL_PASSWORD is not set.")
+    exit(1)  # Exit the program if the password is not set
+
+# Database connection
+db = pymysql.connect(host="localhost", user="root", password="root", db="birthday_db")
+
+def send_birthday_email(name, email):
+    sender_email = "samy.test.404@gmail.com"  # Your Gmail address
+    receiver_email = email  # Recipient's email
+    subject = "Happy Birthday!"
+    body = f"Dear {name},\n\nWishing you a very Happy Birthday!"
+
+    # Debugging: Print email components
+    print(f"Sender Email: {sender_email}")
+    print(f"Receiver Email: {receiver_email}")
+    print(f"Subject: {subject}")
+    print(f"Body: {body}")
+
+    # Prepare the email message
+    msg = MIMEMultipart()
+    msg['From'] = sender_email
+    msg['To'] = receiver_email
+    msg['Subject'] = subject
+    msg.attach(MIMEText(body, 'plain'))
+
+    try:
+        # Using TLS for secure email transmission
+        server = smtplib.SMTP('smtp.gmail.com', 587)  # Gmail SMTP server with TLS
+        server.starttls()  # Start TLS for security
+        server.login(sender_email, password)  # Log in with your email and app password
+        server.sendmail(sender_email, receiver_email, msg.as_string())  # Send the email
+        server.quit()  # Close the connection
+        print(f"Email sent to {name} ({email})")
+    except Exception as e:
+        print(f"Error sending email: {e}")  # If any exception occurs, print the error message
+
+def check_and_send_birthday_emails():
+    today = datetime.today().strftime('%Y-%m-%d')
+    print(f"Today's date: {today}")
+    
+    try:
+        with db.cursor() as cursor:
+            # Query to fetch user data from database
+            query = "SELECT name, email, birthday FROM users"
+            cursor.execute(query)  # Execute the query
+            results = cursor.fetchall()  # Fetch all the results
+            
+            if not results:
+                print("No users found in the database.")
+            else:
+                for (name, email, birthday) in results:
+                    print(f":User  {name}, Email: {email}, Birthday: {birthday}")
+
+                    # Ensure the birthday is a datetime object
+                    if isinstance(birthday, str):  # If birthday is stored as a string
+                        birthday = datetime.strptime(birthday, '%Y-%m-%d')  # Convert to datetime object
+                    
+                    # Check if the birthday matches today's date
+                    if birthday.strftime('%Y-%m-%d') == today:
+                        print(f"Found birthday: {name} ({email})")
+                        send_birthday_email(name, email)  # Send birthday email
+                    else:
+                        print(f"No birthday today for: {name} ({email})")
+    except Exception as e:
+        print(f"Error executing query: {e}")
+    finally:
+        db.close()  # Ensure the connection is closed after the operation
+
+if __name__ == "__main__":
+    check_and_send_birthday_emails()  # Run the function to check and send emails
+
+
+
+
